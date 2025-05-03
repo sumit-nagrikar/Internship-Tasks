@@ -1,0 +1,20 @@
+### Create a product
+POST http://localhost:3000/product
+Content-Type: application/json
+
+{
+  "name": "Office Table 7",
+  "stock": 100
+}
+
+###
+
+### Get a product by ID
+GET http://localhost:3000/product/6810ad83ae5567eec15cd469
+
+###
+
+### Get all products
+GET http://localhost:3000/product
+
+###
