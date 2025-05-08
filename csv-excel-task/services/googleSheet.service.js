@@ -1,41 +1,25 @@
 const { google } = require('googleapis');
-const credentials = require('../config/credentials.json');
+const fs = require('fs').promises;
 const { validateRows } = require('./fileParser.service');
+const { getAuthenticatedClient, getSheetsClient } = require('../utils/googlesheet.utils');
 
-// Auth client setup
-function getAuthClient() {
-    return new google.auth.GoogleAuth({
-        credentials,
-        scopes: [
-            'https://www.googleapis.com/auth/spreadsheets',
-            'https://www.googleapis.com/auth/drive',
-        ],
-    });
-}
+const TEMPLATE_SHEET_ID = '1rKT9Q-zZ-vQA6CZNrMd10qFPSwbHlT51EJ6UUc4g_uI';
 
-// Sheets client
-function getSheetsClient(auth) {
-    return google.sheets({ version: 'v4', auth });
-}
+async function createSheetFromTemplate() {
+    if (!TEMPLATE_SHEET_ID) throw new Error("TEMPLATE_SHEET_ID not available");
 
-// Create a new Google Sheet and make it public
-async function createNewGoogleSheet() {
-    const auth = await getAuthClient().getClient();
-    const sheets = google.sheets({ version: 'v4', auth });
+    const auth = await getAuthenticatedClient();
     const drive = google.drive({ version: 'v3', auth });
 
-    const { data } = await sheets.spreadsheets.create({
+    const { data } = await drive.files.copy({
+        fileId: TEMPLATE_SHEET_ID,
         requestBody: {
-            properties: {
-                title: `Upload Sheet ${new Date().toISOString()}`,
-            },
+            name: `Upload Sheet ${new Date().toISOString()}`,
         },
     });
 
-    const sheetId = data.spreadsheetId;
-
     await drive.permissions.create({
-        fileId: sheetId,
+        fileId: data.id,
         requestBody: {
             role: 'writer',
             type: 'anyone',
@@ -43,39 +27,99 @@ async function createNewGoogleSheet() {
     });
 
     return {
-        sheetId,
-        sheetUrl: `https://docs.google.com/spreadsheets/d/${sheetId}`,
+        sheetId: data.id,
+        sheetUrl: `https://docs.google.com/spreadsheets/d/${data.id}`,
     };
 }
 
-// Write headers + data to a Google Sheet
-async function writeToGoogleSheet(sheetId, data) {
-    const auth = await getAuthClient().getClient();
+async function writeToGoogleSheet(sheetId, data, scriptId) {
+    const auth = await getAuthenticatedClient();
     const sheets = getSheetsClient(auth);
 
     if (!data || data.length === 0) return;
 
     const headers = Object.keys(data[0]);
-    const values = data.map(obj => headers.map(key => obj[key]));
+    const requiredColumns = ["Name", "Email", "Phone", "status", "errorsCount"];//changed
+    if (!requiredColumns.every(col => headers.includes(col))) {
+        throw new Error(`Missing required columns: ${requiredColumns.join(", ")}`);
+    }
+
+    const validatedData = data.map(row => {
+        const name = row.Name ? String(row.Name).trim() : "";
+        const email = row.Email ? String(row.Email).trim() : "";
+        const phone = row.Phone ? String(row.Phone).trim() : "";
+        let errors = [];
+
+        if (!name) errors.push("Missing Name");
+        if (!email) errors.push("Missing Email");
+        if (!phone) errors.push("Missing Phone");
+        if (email && !isValidEmail(email)) errors.push("Invalid Email");
+        if (phone && !isValidPhone(phone)) errors.push("Invalid Phone");
+
+        return {
+            Name: name,
+            Email: email,
+            Phone: phone,
+            status: errors.length === 0 ? "Valid" : errors.join(", "),
+            errorsCount: errors.length
+        };
+    });
+    // console.log('Validated Data=====', validatedData)
+    // Calculate Total Errors
+    const totalErrors = validatedData.reduce((sum, row) => sum + row.ErrorsCount, 0);
+
+    // Prepare values including Total Errors row
+    const values = validatedData.map(obj => headers.map(key => obj[key] || ""));
+    const totalRow = Array(headers.length).fill("");
+    const statusColIndex = headers.indexOf("status");
+    const errorsCountColIndex = headers.indexOf("ErrorsCount");
+    totalRow[statusColIndex] = "Total Errors";
+    totalRow[errorsCountColIndex] = totalErrors;
 
     await sheets.spreadsheets.values.update({
         spreadsheetId: sheetId,
         range: 'Sheet1!A1',
         valueInputOption: 'RAW',
         requestBody: {
-            values: [headers, ...values],
+            values: [headers, ...values, totalRow],
         },
     });
 
     await applyConditionalFormatting(sheetId, headers);
+    await applyDataValidation(sheetId, headers, data.length);
+
+    if (scriptId) {
+        const script = google.script({ version: 'v1', auth });
+        try {
+            await script.scripts.run({
+                scriptId: scriptId,
+                resource: {
+                    function: 'validateAllRows',
+                    parameters: [],
+                },
+            });
+            console.log('validateAllRows executed via API');
+        } catch (error) {
+            console.error('Error running validateAllRows:', error.message);
+        }
+    } else {
+        console.warn('No scriptId provided, relying on onOpen trigger');
+    }
 }
 
-// Highlight "Invalid" status rows using conditional formatting
+function isValidEmail(email) {
+    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
+}
+
+function isValidPhone(phone) {
+    return /^((\+91[-\s]?)?[6-9][0-9]{9})$/.test(phone);
+}
+
 async function applyConditionalFormatting(sheetId, headers) {
-    const auth = await getAuthClient().getClient();
+    const auth = await getAuthenticatedClient();
     const sheets = getSheetsClient(auth);
 
-    const statusColIndex = headers.findIndex(h => h.toLowerCase() === 'status');
+    const statusColIndex = headers.findIndex(h => h === "status");
     if (statusColIndex === -1) return;
 
     await sheets.spreadsheets.batchUpdate({
@@ -98,13 +142,12 @@ async function applyConditionalFormatting(sheetId, headers) {
                                     type: 'CUSTOM_FORMULA',
                                     values: [
                                         {
-                                            userEnteredValue: `=ISNUMBER(SEARCH("Invalid", INDIRECT(ADDRESS(ROW(), ${statusColIndex + 1}))))`,
+                                            userEnteredValue: `=OR(ISNUMBER(SEARCH("Invalid", INDIRECT(ADDRESS(ROW(), ${statusColIndex + 1})))), ISNUMBER(SEARCH("Missing", INDIRECT(ADDRESS(ROW(), ${statusColIndex + 1})))))`,
                                         },
                                     ],
                                 },
                                 format: {
-                                    backgroundColor: { red: 1, green: 0.8, blue: 0.8 },
-                                    textFormat: { bold: true },
+                                    backgroundColor: { red: 1, green: 0.88, blue: 0.88 },
                                 },
                             },
                         },
@@ -116,9 +159,79 @@ async function applyConditionalFormatting(sheetId, headers) {
     });
 }
 
-// Get data from an existing sheet
+async function applyDataValidation(sheetId, headers, rowCount) {
+    const auth = await getAuthenticatedClient();
+    const sheets = getSheetsClient(auth);
+
+    const requests = [];
+    const endRowIndex = rowCount + 1;
+
+    headers.forEach((header, colIndex) => {
+        if (header === "Email") {
+            requests.push({
+                setDataValidation: {
+                    range: {
+                        sheetId: 0,
+                        startRowIndex: 1,
+                        endRowIndex,
+                        startColumnIndex: colIndex,
+                        endColumnIndex: colIndex + 1,
+                    },
+                    rule: {
+                        condition: {
+                            type: 'CUSTOM_FORMULA',
+                            values: [
+                                {
+                                    userEnteredValue: `=REGEXMATCH(INDIRECT(ADDRESS(ROW(), COLUMN())), "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")`,
+                                },
+                            ],
+                        },
+                        inputMessage: 'Enter a valid email address.',
+                        strict: false,
+                        showCustomUi: true,
+                    },
+                },
+            });
+        }
+
+        if (header === "Phone") {
+            requests.push({
+                setDataValidation: {
+                    range: {
+                        sheetId: 0,
+                        startRowIndex: 1,
+                        endRowIndex,
+                        startColumnIndex: colIndex,
+                        endColumnIndex: colIndex + 1,
+                    },
+                    rule: {
+                        condition: {
+                            type: 'CUSTOM_FORMULA',
+                            values: [
+                                {
+                                    userEnteredValue: `=REGEXMATCH(TO_TEXT(INDIRECT(ADDRESS(ROW(), COLUMN()))), "^((\\+91[-\\s]?)?[6-9][0-9]{9})$")`,
+                                },
+                            ],
+                        },
+                        inputMessage: 'Enter a valid 10-digit phone number.',
+                        strict: false,
+                        showCustomUi: true,
+                    },
+                },
+            });
+        }
+    });
+
+    if (requests.length > 0) {
+        await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: sheetId,
+            requestBody: { requests },
+        });
+    }
+}
+
 async function getSheetData(sheetId) {
-    const auth = await getAuthClient().getClient();
+    const auth = await getAuthenticatedClient();
     const sheets = getSheetsClient(auth);
 
     const res = await sheets.spreadsheets.values.get({
@@ -138,7 +251,6 @@ async function getSheetData(sheetId) {
     return { data, headers };
 }
 
-// Re-validate and update Google Sheet with fresh validation results
 async function revalidateSheetData(sheetId) {
     const { data } = await getSheetData(sheetId);
     const validated = validateRows(data);
@@ -146,9 +258,61 @@ async function revalidateSheetData(sheetId) {
     return validated;
 }
 
+async function attachScriptToSheet(sheetId) {
+    try {
+        const auth = await getAuthenticatedClient();
+        const script = google.script({ version: 'v1', auth });
+
+        console.log('Reading code.gs file...');
+        const code = await fs.readFile('scripts/code.gs', 'utf8');
+        // console.log('Code.gs content:', code);
+
+        // console.log('Creating script project for sheet:', sheetId);
+        const { data: scriptProject } = await script.projects.create({
+            requestBody: {
+                title: `Script for Sheet ${sheetId}`,
+                parentId: sheetId,
+            },
+        });
+        console.log('Script project created:', scriptProject.scriptId);
+
+        console.log('Uploading script content...');
+        await script.projects.updateContent({
+            scriptId: scriptProject.scriptId,
+            requestBody: {
+                files: [
+                    {
+                        name: 'Code',
+                        type: 'SERVER_JS',
+                        source: code,
+                    },
+                    {
+                        name: 'appsscript',
+                        type: 'JSON',
+                        source: JSON.stringify({
+                            timeZone: 'Asia/Kolkata',
+                            exceptionLogging: 'STACKDRIVER',
+                            runtimeVersion: 'V8',
+                        }),
+                    },
+                ],
+            },
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        console.log(`Script injected successfully into spreadsheet: https://docs.google.com/spreadsheets/d/${sheetId}`);
+        return scriptProject.scriptId;
+    } catch (error) {
+        console.error('Error injecting script:', error.message);
+        throw error;
+    }
+}
+
 module.exports = {
-    createNewGoogleSheet,
+    createSheetFromTemplate,
     writeToGoogleSheet,
     getSheetData,
     revalidateSheetData,
+    attachScriptToSheet,
 };

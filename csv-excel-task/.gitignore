@@ -1,2 +1,2 @@
-config/credentials.json
+config/*.json
 node_modules/

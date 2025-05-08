@@ -4,33 +4,33 @@ const upload = require('../utils/multerConfig');
 const fs = require('fs');
 const path = require('path');
 const { parseCSV, parseExcel } = require('../services/fileParser.service');
-const { writeToGoogleSheet, createNewGoogleSheet } = require('../services/googleSheet.service');
-const { revalidateSheetData } = require('../services/googleSheet.service');
+const { writeToGoogleSheet, createSheetFromTemplate, attachScriptToSheet, revalidateSheetData } = require('../services/googleSheet.service');
 
 let open;
 (async () => {
-  open = (await import('open')).default;
+    open = (await import('open')).default;
 })();
 
-
-router.post('/upload', upload.single('file'), async (req, res) => {
+router.post('/data', upload.single('file'), async (req, res) => {
     const file = req.file;
     const extension = path.extname(file.originalname);
 
     try {
         let parsedData = [];
 
-        const { sheetId, sheetUrl } = await createNewGoogleSheet();
+        const { sheetId, sheetUrl } = await createSheetFromTemplate();
+        const scriptId = await attachScriptToSheet(sheetId); // Capture scriptId
 
         if (extension === '.csv') {
             parsedData = await parseCSV(file.path);
         } else if (extension === '.xlsx') {
-            parsedData = parseExcel(file.path);
+            parsedData = await parseExcel(file.path);
         } else {
             throw new Error('Only .csv or .xlsx files are supported.');
         }
+        // console.log('parsed data', parsedData);
 
-        await writeToGoogleSheet(sheetId, parsedData);
+        await writeToGoogleSheet(sheetId, parsedData, scriptId); // Pass scriptId
 
         fs.unlinkSync(file.path);
 
@@ -47,13 +47,10 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     }
 });
 
-
 router.get('/recheck/:sheetId', async (req, res) => {
-    try {console.log("req.params",req.params);
-    const {sheetId} =req.params;
-    
+    try {
+        const { sheetId } = req.params;
         const result = await revalidateSheetData(sheetId);
-
         res.json({ success: true, data: result });
     } catch (err) {
         console.error('Recheck error:', err);

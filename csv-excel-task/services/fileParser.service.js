@@ -37,15 +37,18 @@ function validateRows(rows) {
     return rows.map((row, index) => {
         const newRow = { ...row };
         const statusMessages = [];
+        let errorCount = 0;
 
         // Email Validation
         if (emailKey) {
             const email = row[emailKey]?.toString().trim();
             if (!validateEmail(email)) {
                 statusMessages.push('Invalid Email');
+                errorCount++;
             }
         } else {
             statusMessages.push('Email Field Missing');
+            errorCount++;
         }
 
         // Phone Validation
@@ -57,15 +60,20 @@ function validateRows(rows) {
 
             if (!hasValidPhone) {
                 statusMessages.push('Invalid Phone');
+                errorCount++;
             }
         } else {
             statusMessages.push('Phone Field Missing');
+            errorCount++;
         }
 
-        newRow.status = statusMessages.length ? statusMessages.join(', ') : 'Valid';
+        newRow.status = statusMessages.length ? statusMessages.join(', ') : 'Valid';//changed header names
+        newRow.errorsCount = errorCount;
+
         return newRow;
     });
 }
+
 
 function parseCSV(filePath) {
     return new Promise((resolve, reject) => {
