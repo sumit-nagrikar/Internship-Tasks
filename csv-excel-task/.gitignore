@@ -1,2 +1,4 @@
-config/*.json
+config/credentials.json
+/csv-excel-task/config/oauth2.json
+/csv-excel-task/config/token.json
 node_modules/
