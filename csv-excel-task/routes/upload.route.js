@@ -28,7 +28,7 @@ router.post('/data', upload.single('file'), async (req, res) => {
         } else {
             throw new Error('Only .csv or .xlsx files are supported.');
         }
-        // console.log('parsed data', parsedData);
+        console.log('parsed data', parsedData);
 
         await writeToGoogleSheet(sheetId, parsedData, scriptId); // Pass scriptId
 

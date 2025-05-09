@@ -43,7 +43,7 @@ function getNewToken() {
         prompt: 'consent',
     });
 
-    console.log('\n👉 Authorize this app by visiting this URL:\n', authUrl);
+    console.log('\n Authorize this app by visiting this URL:\n', authUrl);
 
     const rl = readline.createInterface({
         input: process.stdin,
@@ -51,16 +51,16 @@ function getNewToken() {
     });
 
     return new Promise((resolve, reject) => {
-        rl.question('\n🔑 Enter the code from that page here: ', (code) => {
+        rl.question('\nEnter the code from that page here: ', (code) => {
             rl.close();
             oauth2Client.getToken(code, (err, token) => {
                 if (err) {
-                    console.error('❌ Error retrieving access token', err);
+                    console.error('Error retrieving access token', err);
                     return reject(err);
                 }
                 oauth2Client.setCredentials(token);
                 fs.writeFileSync(TOKEN_PATH, JSON.stringify(token));
-                console.log('✅ Token stored to', TOKEN_PATH);
+                console.log('Token stored to', TOKEN_PATH);
                 resolve(oauth2Client);
             });
         });
@@ -75,7 +75,7 @@ function getSheetsClient(auth) {
 function setTokens(tokens) {
     oauth2Client.setCredentials(tokens);
     fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
-    console.log('✅ Token saved to', TOKEN_PATH);
+    console.log('Token saved to', TOKEN_PATH);
 }
 
 module.exports = {

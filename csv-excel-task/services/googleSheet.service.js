@@ -38,55 +38,89 @@ async function writeToGoogleSheet(sheetId, data, scriptId) {
 
     if (!data || data.length === 0) return;
 
-    const headers = Object.keys(data[0]);
-    const requiredColumns = ["Name", "Email", "Phone", "status", "errorsCount"];//changed
-    if (!requiredColumns.every(col => headers.includes(col))) {
-        throw new Error(`Missing required columns: ${requiredColumns.join(", ")}`);
+    // Step 1: Normalize fields
+    const fieldAliases = {
+        Name: ['name', 'full name'],
+        Email: ['email', 'email address'],
+        Phone: ['phone', 'mobile', 'contact'],
+    };
+
+    function normalizeKey(row, fieldName) {
+        const aliases = fieldAliases[fieldName];
+        for (let alias of aliases) {
+            const match = Object.keys(row).find(k => k.toLowerCase().includes(alias));
+            if (match) return row[match];
+        }
+        return '';
     }
 
+    // Step 2: Process and normalize rows
     const validatedData = data.map(row => {
-        const name = row.Name ? String(row.Name).trim() : "";
-        const email = row.Email ? String(row.Email).trim() : "";
-        const phone = row.Phone ? String(row.Phone).trim() : "";
-        let errors = [];
+        const name = normalizeKey(row, 'Name');
+        const email = normalizeKey(row, 'Email');
+        const phone = normalizeKey(row, 'Phone');
 
-        if (!name) errors.push("Missing Name");
-        if (!email) errors.push("Missing Email");
-        if (!phone) errors.push("Missing Phone");
-        if (email && !isValidEmail(email)) errors.push("Invalid Email");
-        if (phone && !isValidPhone(phone)) errors.push("Invalid Phone");
+        const normalized = {
+            Name: String(name).trim(),
+            Email: String(email).trim(),
+            Phone: String(phone).trim(),
+        };
+
+        // Add any extra fields (preserve as-is)
+        const extraFields = {};
+        for (let key of Object.keys(row)) {
+            const lowerKey = key.toLowerCase();
+            if (!['name', 'full name', 'email', 'email address', 'phone', 'mobile', 'contact'].includes(lowerKey)) {
+                extraFields[key] = row[key];
+            }
+        }
+
+        // Validation
+        let errors = [];
+        if (!normalized.Name) errors.push("Missing Name");
+        if (!normalized.Email) errors.push("Missing Email");
+        if (!normalized.Phone) errors.push("Missing Phone");
+        if (normalized.Email && !isValidEmail(normalized.Email)) errors.push("Invalid Email");
+        if (normalized.Phone && !isValidPhone(normalized.Phone)) errors.push("Invalid Phone");
 
         return {
-            Name: name,
-            Email: email,
-            Phone: phone,
+            ...normalized,
+            ...extraFields,
             status: errors.length === 0 ? "Valid" : errors.join(", "),
-            errorsCount: errors.length
+            errorsCount: errors.length,
         };
     });
-    // console.log('Validated Data=====', validatedData)
-    // Calculate Total Errors
-    const totalErrors = validatedData.reduce((sum, row) => sum + row.ErrorsCount, 0);
 
-    // Prepare values including Total Errors row
-    const values = validatedData.map(obj => headers.map(key => obj[key] || ""));
-    const totalRow = Array(headers.length).fill("");
-    const statusColIndex = headers.indexOf("status");
-    const errorsCountColIndex = headers.indexOf("ErrorsCount");
-    totalRow[statusColIndex] = "Total Errors";
-    totalRow[errorsCountColIndex] = totalErrors;
+    // Step 3: Collect all headers dynamically
+    const allHeaders = new Set();
+    validatedData.forEach(obj => Object.keys(obj).forEach(key => allHeaders.add(key)));
 
+    // Fix header order: Known → Extra → Final
+    const knownHeaders = ["Name", "Email", "Phone"];
+    const extraHeaders = [...allHeaders].filter(h => !knownHeaders.includes(h) && h !== "status" && h !== "errorsCount");
+    const finalHeaders = [...knownHeaders, ...extraHeaders, "status", "errorsCount"];
+
+    // Step 4: Prepare values
+    const values = validatedData.map(obj => finalHeaders.map(h => obj[h] ?? ""));
+
+    // Step 5: Total Errors Row
+    const totalErrors = validatedData.reduce((sum, row) => sum + row.errorsCount, 0);
+    const totalRow = Array(finalHeaders.length).fill("");
+    totalRow[finalHeaders.indexOf("status")] = "Total Errors";
+    totalRow[finalHeaders.indexOf("errorsCount")] = totalErrors;
+
+    // Step 6: Write to Sheet
     await sheets.spreadsheets.values.update({
         spreadsheetId: sheetId,
         range: 'Sheet1!A1',
         valueInputOption: 'RAW',
         requestBody: {
-            values: [headers, ...values, totalRow],
+            values: [finalHeaders, ...values, totalRow],
         },
     });
 
-    await applyConditionalFormatting(sheetId, headers);
-    await applyDataValidation(sheetId, headers, data.length);
+    await applyConditionalFormatting(sheetId, finalHeaders);
+    await applyDataValidation(sheetId, finalHeaders, data.length);
 
     if (scriptId) {
         const script = google.script({ version: 'v1', auth });
@@ -106,6 +140,7 @@ async function writeToGoogleSheet(sheetId, data, scriptId) {
         console.warn('No scriptId provided, relying on onOpen trigger');
     }
 }
+
 
 function isValidEmail(email) {
     return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
