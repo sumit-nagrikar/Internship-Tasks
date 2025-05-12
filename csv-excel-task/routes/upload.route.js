@@ -28,7 +28,7 @@ router.post('/data', upload.single('file'), async (req, res) => {
         } else {
             throw new Error('Only .csv or .xlsx files are supported.');
         }
-        console.log('parsed data', parsedData);
+        // console.log('parsed data', parsedData);
 
         await writeToGoogleSheet(sheetId, parsedData, scriptId); // Pass scriptId
 
@@ -51,7 +51,7 @@ router.get('/recheck/:sheetId', async (req, res) => {
     try {
         const { sheetId } = req.params;
         const result = await revalidateSheetData(sheetId);
-        res.json({ success: true, data: result });
+        res.json({ success: true });
     } catch (err) {
         console.error('Recheck error:', err);
         res.status(500).json({ success: false, error: 'Something went wrong' });

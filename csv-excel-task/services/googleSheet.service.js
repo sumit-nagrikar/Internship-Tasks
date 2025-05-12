@@ -32,7 +32,7 @@ async function createSheetFromTemplate() {
     };
 }
 
-async function writeToGoogleSheet(sheetId, data, scriptId) {
+async function writeToGoogleSheet(sheetId, data) {
     const auth = await getAuthenticatedClient();
     const sheets = getSheetsClient(auth);
 
@@ -40,9 +40,9 @@ async function writeToGoogleSheet(sheetId, data, scriptId) {
 
     // Step 1: Normalize fields
     const fieldAliases = {
-        Name: ['name', 'full name'],
-        Email: ['email', 'email address'],
-        Phone: ['phone', 'mobile', 'contact'],
+        Name: ['name', 'FIRST_NAME'],
+        Email: ['email', 'CONTACT_EMAIL'],
+        Phone: ['phone', 'mobile', 'CONTACT_NUMBER'],
     };
 
     function normalizeKey(row, fieldName) {
@@ -110,10 +110,11 @@ async function writeToGoogleSheet(sheetId, data, scriptId) {
     totalRow[finalHeaders.indexOf("errorsCount")] = totalErrors;
 
     // Step 6: Write to Sheet
-    await sheets.spreadsheets.values.update({
+    await sheets.spreadsheets.values.append({
         spreadsheetId: sheetId,
         range: 'Sheet1!A1',
         valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
         requestBody: {
             values: [finalHeaders, ...values, totalRow],
         },
@@ -122,23 +123,6 @@ async function writeToGoogleSheet(sheetId, data, scriptId) {
     await applyConditionalFormatting(sheetId, finalHeaders);
     await applyDataValidation(sheetId, finalHeaders, data.length);
 
-    if (scriptId) {
-        const script = google.script({ version: 'v1', auth });
-        try {
-            await script.scripts.run({
-                scriptId: scriptId,
-                resource: {
-                    function: 'validateAllRows',
-                    parameters: [],
-                },
-            });
-            console.log('validateAllRows executed via API');
-        } catch (error) {
-            console.error('Error running validateAllRows:', error.message);
-        }
-    } else {
-        console.warn('No scriptId provided, relying on onOpen trigger');
-    }
 }
 
 
@@ -290,7 +274,7 @@ async function revalidateSheetData(sheetId) {
     const { data } = await getSheetData(sheetId);
     const validated = validateRows(data);
     await writeToGoogleSheet(sheetId, validated);
-    return validated;
+    // return validated;
 }
 
 async function attachScriptToSheet(sheetId) {

@@ -6,31 +6,26 @@ function onEdit(e) {
 
   const sheet = e.source.getActiveSheet();
   const row = e.range.getRow();
-  const col = e.range.getColumn();
 
   if (row === 1) {
     Logger.log('Header row edited, skipping');
     return;
   }
 
-  const columns = getColumnIndices(sheet);
-  if (!columns) {
-    Logger.log('Failed to get column indices');
-    return;
-  }
-
-  // Clean "Edited" values in Email/Phone columns on any edit
-  cleanEditedValues(sheet, columns, row);
-
-  // Optionally: Only validate when relevant columns are edited (e.g., Email/Phone columns)
-  const editedColumnIsRelevant = col === columns.emailCol || col === columns.phoneCol;
-  if (editedColumnIsRelevant) {
-    Logger.log(`Validating row ${row}`);
-    validateSingleRow(sheet, row);
-    updateTotalErrors(sheet);
-  }
+  validateSingleRow(sheet,row);
+  updateTotalErrors(sheet);
 }
 
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu("Validator")
+    .addItem("Validate All Rows", "validateSheetManually")
+    .addToUi();
+
+ const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  validateAllRows(sheet);
+  updateTotalErrors(sheet);
+}
 
 function validateSheetManually() {
   const sheet = SpreadsheetApp.getActiveSheet();
@@ -55,44 +50,35 @@ function getColumnIndices(sheet) {
   return { nameCol, emailCol, phoneCol, statusCol, errorCountCol };
 }
 
-function cleanEditedValues(sheet, columns, row = null) {
+function cleanEditedValues(sheet, columns) {
   const lastRow = sheet.getLastRow();
   if (lastRow <= 1) return;
 
-  const rowsToCheck = row ? [row] : Array.from({ length: lastRow - 1 }, (_, i) => i + 2); // Rows 2 to lastRow
+  const ranges = [
+    sheet.getRange(2, columns.emailCol, lastRow - 1, 1),
+    sheet.getRange(2, columns.phoneCol, lastRow - 1, 1)
+  ];
 
-  const emailRange = sheet.getRange(2, columns.emailCol, lastRow - 1, 1).getValues();
-  const phoneRange = sheet.getRange(2, columns.phoneCol, lastRow - 1, 1).getValues();
-
-  let emailEdited = false;
-  let phoneEdited = false;
-
-  rowsToCheck.forEach((r) => {
-    const rowIndex = r - 2; // Because emailRange starts from row 2
-    if (emailRange[rowIndex][0] === "Edited") {
-      emailRange[rowIndex][0] = "";
-      emailEdited = true;
+  ranges.forEach(range => {
+    const values = range.getValues();
+    let editedFound = false;
+    for (let i = 0; i < values.length; i++) {
+      if (values[i][0] === "Edited") {
+        values[i][0] = "";
+        editedFound = true;
+      }
     }
-    if (phoneRange[rowIndex][0] === "Edited") {
-      phoneRange[rowIndex][0] = "";
-      phoneEdited = true;
+    if (editedFound) {
+      range.setValues(values);
+      Logger.log(`Cleared "Edited" from ${range.getA1Notation()}`);
     }
   });
-
-  if (emailEdited) {
-    sheet.getRange(2, columns.emailCol, lastRow - 1, 1).setValues(emailRange);
-    Logger.log(`Cleared "Edited" flags from Email column`);
-  }
-  if (phoneEdited) {
-    sheet.getRange(2, columns.phoneCol, lastRow - 1, 1).setValues(phoneRange);
-    Logger.log(`Cleared "Edited" flags from Phone column`);
-  }
 }
 
-function validateInputsFromRow(rowData, columns) {
-  const name = rowData[columns.nameCol - 1]?.toString().trim() || "";
-  const email = rowData[columns.emailCol - 1]?.toString().trim() || "";
-  const phone = rowData[columns.phoneCol - 1]?.toString().trim() || "";
+function validateInputs(sheet, row, columns) {
+  const name = sheet.getRange(row, columns.nameCol).getValue().toString().trim();
+  const email = sheet.getRange(row, columns.emailCol).getValue().toString().trim();
+  const phone = sheet.getRange(row, columns.phoneCol).getValue().toString().trim();
 
   let errors = [];
   if (!name) errors.push("Missing Name");
@@ -101,6 +87,7 @@ function validateInputsFromRow(rowData, columns) {
   if (email && !isValidEmail(email)) errors.push("Invalid Email");
   if (phone && !isValidPhone(phone)) errors.push("Invalid Phone");
 
+  Logger.log(`Row ${row}: Name=${name}, Email=${email}, Phone=${phone}, Errors=${errors.join(", ") || "none"}`);
   return { name, email, phone, errors };
 }
 
@@ -111,6 +98,7 @@ function validateSingleRow(sheet, row) {
     return;
   }
 
+  // Don't validate header or total row
   const lastRow = sheet.getLastRow();
   if (row === 1) {
     Logger.log('Skipping header row');
@@ -124,30 +112,16 @@ function validateSingleRow(sheet, row) {
   }
 
   try {
-    cleanEditedValues(sheet, columns, row);
-
-    // Batch read row data
-    const rowData = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const { errors } = validateInputsFromRow(rowData, columns);
+    cleanEditedValues(sheet, columns, row); // optionally pass row to clean just that row
+    const { errors } = validateInputs(sheet, row, columns);
 
     const status = errors.length === 0 ? "Valid" : errors.join(", ");
     const errorsCount = errors.length;
     const background = errors.length > 0 ? "#ffe0e0" : null;
 
-    // Update status and errors (write back)
     sheet.getRange(row, columns.statusCol, 1, 2).setValues([[status, errorsCount]]);
-
-    // Only update background for the edited row (single row optimization)
-    const currentBackground = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getBackgrounds()[0];
+    sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackgrounds([Array(sheet.getLastColumn()).fill(background)]);
     
-    // Only set background if it differs
-    if (currentBackground.some(bg => bg !== background)) {
-      sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground(background);
-      Logger.log(`Updated background for row ${row}`);
-    } else {
-      Logger.log(`No background change needed for row ${row}`);
-    }
-
     Logger.log(`Validated row ${row}`);
   } catch (error) {
     Logger.log(`Error in validateSingleRow for row ${row}: ${error.message}`);
@@ -180,19 +154,16 @@ function validateAllRows(sheet) {
       dataLastRow = lastRow - 1;
     }
 
-    const allValues = sheet.getRange(2, 1, dataLastRow - 1, sheet.getLastColumn()).getValues();
-
-    for (let i = 0; i < allValues.length; i++) {
-      const rowData = allValues[i];
-      const { errors } = validateInputsFromRow(rowData, columns);
+    for (let row = 2; row <= dataLastRow; row++) {
+      const { errors } = validateInputs(sheet, row, columns);
       updates.push([errors.length === 0 ? "Valid" : errors.join(", "), errors.length]);
-      backgrounds.push([errors.length > 0 ? "#ffe0e0" : null]);
-      Logger.log(`Processed row ${i + 2}`);
+      backgrounds.push(errors.length > 0 ? "#ffe0e0" : null);
+      Logger.log(`Processed row ${row}`);
     }
 
     if (updates.length > 0) {
-      sheet.getRange(2, columns.statusCol, updates.length, 2).setValues(updates);
-      sheet.getRange(2, 1, backgrounds.length, 1).setBackgrounds(backgrounds);
+      sheet.getRange(2, columns.statusCol, dataLastRow - 1, 2).setValues(updates);
+      sheet.getRange(2, 1, dataLastRow - 1, sheet.getLastColumn()).setBackgrounds(backgrounds.map(bg => [bg]));
       Logger.log(`Batch updated rows 2 to ${dataLastRow}`);
     }
 
