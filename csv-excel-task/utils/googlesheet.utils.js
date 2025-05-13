@@ -12,7 +12,7 @@ const { client_secret, client_id, redirect_uris } = credentials.installed;
 const oauth2Client = new google.auth.OAuth2(
     client_id,
     client_secret,
-    redirect_uris[0] // http://localhost
+    redirect_uris[0]
 );
 
 

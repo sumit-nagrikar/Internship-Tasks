@@ -1,6 +1,5 @@
 const { google } = require('googleapis');
 const fs = require('fs').promises;
-const { validateRows } = require('./fileParser.service');
 const { getAuthenticatedClient, getSheetsClient } = require('../utils/googlesheet.utils');
 
 const TEMPLATE_SHEET_ID = '1rKT9Q-zZ-vQA6CZNrMd10qFPSwbHlT51EJ6UUc4g_uI';
@@ -10,7 +9,9 @@ async function createSheetFromTemplate() {
 
     const auth = await getAuthenticatedClient();
     const drive = google.drive({ version: 'v3', auth });
+    const sheets = getSheetsClient(auth);
 
+    // Copy the template spreadsheet
     const { data } = await drive.files.copy({
         fileId: TEMPLATE_SHEET_ID,
         requestBody: {
@@ -18,8 +19,46 @@ async function createSheetFromTemplate() {
         },
     });
 
+    // Clear existing sheets except one (to ensure a clean slate)
+    const spreadsheetId = data.id;
+    const metadata = await sheets.spreadsheets.get({
+        spreadsheetId,
+        fields: 'sheets.properties',
+    });
+
+    const existingSheets = metadata.data.sheets;
+    if (existingSheets.length > 1) {
+        const requests = existingSheets.slice(1).map(sheet => ({
+            deleteSheet: {
+                sheetId: sheet.properties.sheetId,
+            },
+        }));
+        await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: { requests },
+        });
+    }
+
+    // Rename the remaining sheet to a temporary name
+    if (existingSheets.length > 0) {
+        await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+                requests: [{
+                    updateSheetProperties: {
+                        properties: {
+                            sheetId: existingSheets[0].properties.sheetId,
+                            title: 'TempSheet',
+                        },
+                        fields: 'title',
+                    },
+                }],
+            },
+        });
+    }
+
     await drive.permissions.create({
-        fileId: data.id,
+        fileId: spreadsheetId,
         requestBody: {
             role: 'writer',
             type: 'anyone',
@@ -27,270 +66,193 @@ async function createSheetFromTemplate() {
     });
 
     return {
-        sheetId: data.id,
-        sheetUrl: `https://docs.google.com/spreadsheets/d/${data.id}`,
+        sheetId: spreadsheetId,
+        sheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
     };
 }
 
+async function initializeSchoolSheets(auth, spreadsheetId, schools) {
+    try {
+        const sheets = getSheetsClient(auth);
+
+        // Fetch existing sheets
+        const response = await sheets.spreadsheets.get({
+            spreadsheetId,
+            fields: 'sheets.properties.title',
+        });
+
+        const existingSheets = response.data.sheets.map(
+            (sheet) => sheet.properties.title.toUpperCase()
+        );
+        console.log('Existing sheets:', existingSheets);
+
+        // Filter out schools that already have sheets (case-insensitive)
+        const sheetsToCreate = schools.filter(
+            (school) => !existingSheets.includes(school.toUpperCase())
+        );
+
+        if (sheetsToCreate.length === 0) {
+            console.log('All sheets already exist. Proceeding with data upload...');
+            return;
+        }
+
+        // Create batch update request for new sheets
+        const requests = sheetsToCreate.map((school) => ({
+            addSheet: {
+                properties: {
+                    title: school,
+                    gridProperties: {
+                        frozenRowCount: 2, // Freeze first row (metadata) and second row (headers)
+                    },
+                },
+            },
+        }));
+
+        // Execute batch update to create new sheets
+        await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            resource: {
+                requests,
+            },
+        });
+
+        console.log('Created sheets:', sheetsToCreate);
+    } catch (error) {
+        console.error('Error initializing sheets:', error.message);
+        throw error;
+    }
+}
+
 async function writeToGoogleSheet(sheetId, data, scriptId) {
+    const { firstRow, groupedData } = data;
+    if (!groupedData || Object.keys(groupedData).length === 0) {
+        console.warn('No grouped data provided');
+        return;
+    }
+
     const auth = await getAuthenticatedClient();
     const sheets = getSheetsClient(auth);
 
-    if (!data || data.length === 0) return;
+    // Initialize sheets for all schools
+    const schoolNames = Object.keys(groupedData).map(
+        school => groupedData[school].schoolDisplayName || school
+    );
+    await initializeSchoolSheets(auth, sheetId, schoolNames);
 
-    // Step 1: Normalize fields
-    const fieldAliases = {
-        Name: ['name', 'full name'],
-        Email: ['email', 'email address'],
-        Phone: ['phone', 'mobile', 'contact'],
-    };
-
-    function normalizeKey(row, fieldName) {
-        const aliases = fieldAliases[fieldName];
-        for (let alias of aliases) {
-            const match = Object.keys(row).find(k => k.toLowerCase().includes(alias));
-            if (match) return row[match];
+    // Write data to each sheet
+    for (const schoolName of Object.keys(groupedData)) {
+        const data = groupedData[schoolName].rows;
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            console.warn(`No valid data for school: ${schoolName}`);
+            continue;
         }
-        return '';
+
+        const sheetTitle = groupedData[schoolName].schoolDisplayName || schoolName;
+
+        // Dynamically generate headers from the first row's keys
+        if (!data[0]) {
+            console.warn(`No data rows for school: ${schoolName}`);
+            continue;
+        }
+        const rawHeaders = Object.keys(data[0]);
+     
+        const headers = rawHeaders.map(header => {
+            const upperHeader = header.toUpperCase();
+            if (upperHeader === 'SCHOOL_NAME') return 'SCHOOL_NAME';
+            if (upperHeader === 'FIRST_NAME') return 'Name';
+            if (upperHeader === 'CONTACT_EMAIL') return 'Email';
+            if (upperHeader.includes('PHONE') || upperHeader.includes('MOBILE') || upperHeader.includes('CONTACT')) return 'Phone';
+            return header;
+        });
+        if (headers.length === 0) {
+            console.warn(`No valid headers for school: ${schoolName}`);
+            continue;
+        }
+
+        const rows = data.map(row => headers.map(header => row[header] || row[header.toLowerCase()] || row[header.toUpperCase()] || ''));
+
+        await sheets.spreadsheets.values.update({
+            spreadsheetId: sheetId,
+            range: `'${sheetTitle}'!A1`,
+            valueInputOption: 'RAW',
+            requestBody: {
+                values: [firstRow, headers, ...rows],
+            },
+        });
+
+        // Resize columns
+        const sheetIdNum = await getSheetIdByName(sheets, sheetId, sheetTitle);
+        if (sheetIdNum !== null) {
+            await sheets.spreadsheets.batchUpdate({
+                spreadsheetId: sheetId,
+                requestBody: {
+                    requests: [{
+                        autoResizeDimensions: {
+                            dimensions: {
+                                sheetId: sheetIdNum,
+                                dimension: 'COLUMNS',
+                                startIndex: 0,
+                                endIndex: Math.max(firstRow.length, headers.length),
+                            },
+                        },
+                    }],
+                },
+            });
+        }
+
+        // Apply formatting and validation
+        await applyConditionalFormatting(sheetId, headers, sheetTitle);
+        await applyDataValidation(sheetId, headers, data.length, sheetTitle);
     }
 
-    // Step 2: Process and normalize rows
-    const validatedData = data.map(row => {
-        const name = normalizeKey(row, 'Name');
-        const email = normalizeKey(row, 'Email');
-        const phone = normalizeKey(row, 'Phone');
-
-        const normalized = {
-            Name: String(name).trim(),
-            Email: String(email).trim(),
-            Phone: String(phone).trim(),
-        };
-
-        // Add any extra fields (preserve as-is)
-        const extraFields = {};
-        for (let key of Object.keys(row)) {
-            const lowerKey = key.toLowerCase();
-            if (!['name', 'full name', 'email', 'email address', 'phone', 'mobile', 'contact'].includes(lowerKey)) {
-                extraFields[key] = row[key];
-            }
-        }
-
-        // Validation
-        let errors = [];
-        if (!normalized.Name) errors.push("Missing Name");
-        if (!normalized.Email) errors.push("Missing Email");
-        if (!normalized.Phone) errors.push("Missing Phone");
-        if (normalized.Email && !isValidEmail(normalized.Email)) errors.push("Invalid Email");
-        if (normalized.Phone && !isValidPhone(normalized.Phone)) errors.push("Invalid Phone");
-
-        return {
-            ...normalized,
-            ...extraFields,
-            status: errors.length === 0 ? "Valid" : errors.join(", "),
-            errorsCount: errors.length,
-        };
-    });
-
-    // Step 3: Collect all headers dynamically
-    const allHeaders = new Set();
-    validatedData.forEach(obj => Object.keys(obj).forEach(key => allHeaders.add(key)));
-
-    // Fix header order: Known → Extra → Final
-    const knownHeaders = ["Name", "Email", "Phone"];
-    const extraHeaders = [...allHeaders].filter(h => !knownHeaders.includes(h) && h !== "status" && h !== "errorsCount");
-    const finalHeaders = [...knownHeaders, ...extraHeaders, "status", "errorsCount"];
-
-    // Step 4: Prepare values
-    const values = validatedData.map(obj => finalHeaders.map(h => obj[h] ?? ""));
-
-    // Step 5: Total Errors Row
-    const totalErrors = validatedData.reduce((sum, row) => sum + row.errorsCount, 0);
-    const totalRow = Array(finalHeaders.length).fill("");
-    totalRow[finalHeaders.indexOf("status")] = "Total Errors";
-    totalRow[finalHeaders.indexOf("errorsCount")] = totalErrors;
-
-    // Step 6: Write to Sheet
-    await sheets.spreadsheets.values.update({
-        spreadsheetId: sheetId,
-        range: 'Sheet1!A1',
-        valueInputOption: 'RAW',
-        requestBody: {
-            values: [finalHeaders, ...values, totalRow],
-        },
-    });
-
-    await applyConditionalFormatting(sheetId, finalHeaders);
-    await applyDataValidation(sheetId, finalHeaders, data.length);
-
+    // Run Apps Script validation
     if (scriptId) {
         const script = google.script({ version: 'v1', auth });
         try {
-            await script.scripts.run({
-                scriptId: scriptId,
+            console.log(`Attempting to run script with ID: ${scriptId}`);
+            // Verify script content
+            const content = await script.projects.getContent({ scriptId });
+            const hasValidateAllRows = content.data.files.some(file => 
+                file.source.includes('function validateAllRows')
+            );
+            if (!hasValidateAllRows) {
+                throw new Error('validateAllRows function not found in script');
+            }
+            // Retry script execution
+            const response = await runScriptWithRetry(script, scriptId);
+            console.log('Apps Script validateAllRows executed:', response.data);
+        } catch (err) {
+            console.error(`Script execution failed for scriptId ${scriptId}: ${err.message}`);
+            console.error('Error details:', JSON.stringify(err, null, 2));
+            if (err.message.includes('Requested entity was not found')) {
+                console.error('Possible causes: Invalid scriptId, script project not propagated, missing permissions, Google Apps Script API not enabled, or deployment not active.');
+                console.error(`Check script project: https://script.google.com/home/projects/${scriptId}`);
+            }
+        }
+    } else {
+        console.warn('No scriptId provided; skipping Apps Script validation');
+    }
+}
+
+async function runScriptWithRetry(script, scriptId, maxRetries = 3, delay = 2000) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const response = await script.scripts.run({
+                scriptId,
                 resource: {
                     function: 'validateAllRows',
                     parameters: [],
                 },
             });
-            console.log('validateAllRows executed via API');
-        } catch (error) {
-            console.error('Error running validateAllRows:', error.message);
+            return response;
+        } catch (err) {
+            console.warn(`Attempt ${attempt} failed for scriptId ${scriptId}: ${err.message}`);
+            if (attempt === maxRetries) {
+                throw new Error(`Failed to run script after ${maxRetries} attempts: ${err.message}`);
+            }
+            await new Promise(resolve => setTimeout(resolve, delay));
         }
-    } else {
-        console.warn('No scriptId provided, relying on onOpen trigger');
     }
-}
-
-
-function isValidEmail(email) {
-    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
-}
-
-function isValidPhone(phone) {
-    return /^((\+91[-\s]?)?[6-9][0-9]{9})$/.test(phone);
-}
-
-async function applyConditionalFormatting(sheetId, headers) {
-    const auth = await getAuthenticatedClient();
-    const sheets = getSheetsClient(auth);
-
-    const statusColIndex = headers.findIndex(h => h === "status");
-    if (statusColIndex === -1) return;
-
-    await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: sheetId,
-        requestBody: {
-            requests: [
-                {
-                    addConditionalFormatRule: {
-                        rule: {
-                            ranges: [
-                                {
-                                    sheetId: 0,
-                                    startRowIndex: 1,
-                                    startColumnIndex: 0,
-                                    endColumnIndex: headers.length,
-                                },
-                            ],
-                            booleanRule: {
-                                condition: {
-                                    type: 'CUSTOM_FORMULA',
-                                    values: [
-                                        {
-                                            userEnteredValue: `=OR(ISNUMBER(SEARCH("Invalid", INDIRECT(ADDRESS(ROW(), ${statusColIndex + 1})))), ISNUMBER(SEARCH("Missing", INDIRECT(ADDRESS(ROW(), ${statusColIndex + 1})))))`,
-                                        },
-                                    ],
-                                },
-                                format: {
-                                    backgroundColor: { red: 1, green: 0.88, blue: 0.88 },
-                                },
-                            },
-                        },
-                        index: 0,
-                    },
-                },
-            ],
-        },
-    });
-}
-
-async function applyDataValidation(sheetId, headers, rowCount) {
-    const auth = await getAuthenticatedClient();
-    const sheets = getSheetsClient(auth);
-
-    const requests = [];
-    const endRowIndex = rowCount + 1;
-
-    headers.forEach((header, colIndex) => {
-        if (header === "Email") {
-            requests.push({
-                setDataValidation: {
-                    range: {
-                        sheetId: 0,
-                        startRowIndex: 1,
-                        endRowIndex,
-                        startColumnIndex: colIndex,
-                        endColumnIndex: colIndex + 1,
-                    },
-                    rule: {
-                        condition: {
-                            type: 'CUSTOM_FORMULA',
-                            values: [
-                                {
-                                    userEnteredValue: `=REGEXMATCH(INDIRECT(ADDRESS(ROW(), COLUMN())), "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")`,
-                                },
-                            ],
-                        },
-                        inputMessage: 'Enter a valid email address.',
-                        strict: false,
-                        showCustomUi: true,
-                    },
-                },
-            });
-        }
-
-        if (header === "Phone") {
-            requests.push({
-                setDataValidation: {
-                    range: {
-                        sheetId: 0,
-                        startRowIndex: 1,
-                        endRowIndex,
-                        startColumnIndex: colIndex,
-                        endColumnIndex: colIndex + 1,
-                    },
-                    rule: {
-                        condition: {
-                            type: 'CUSTOM_FORMULA',
-                            values: [
-                                {
-                                    userEnteredValue: `=REGEXMATCH(TO_TEXT(INDIRECT(ADDRESS(ROW(), COLUMN()))), "^((\\+91[-\\s]?)?[6-9][0-9]{9})$")`,
-                                },
-                            ],
-                        },
-                        inputMessage: 'Enter a valid 10-digit phone number.',
-                        strict: false,
-                        showCustomUi: true,
-                    },
-                },
-            });
-        }
-    });
-
-    if (requests.length > 0) {
-        await sheets.spreadsheets.batchUpdate({
-            spreadsheetId: sheetId,
-            requestBody: { requests },
-        });
-    }
-}
-
-async function getSheetData(sheetId) {
-    const auth = await getAuthenticatedClient();
-    const sheets = getSheetsClient(auth);
-
-    const res = await sheets.spreadsheets.values.get({
-        spreadsheetId: sheetId,
-        range: 'Sheet1',
-    });
-
-    const [headers, ...rows] = res.data.values;
-    const data = rows.map(row => {
-        const obj = {};
-        headers.forEach((header, i) => {
-            obj[header] = row[i] || '';
-        });
-        return obj;
-    });
-
-    return { data, headers };
-}
-
-async function revalidateSheetData(sheetId) {
-    const { data } = await getSheetData(sheetId);
-    const validated = validateRows(data);
-    await writeToGoogleSheet(sheetId, validated);
-    return validated;
 }
 
 async function attachScriptToSheet(sheetId) {
@@ -300,9 +262,8 @@ async function attachScriptToSheet(sheetId) {
 
         console.log('Reading code.gs file...');
         const code = await fs.readFile('scripts/code.gs', 'utf8');
-        // console.log('Code.gs content:', code);
 
-        // console.log('Creating script project for sheet:', sheetId);
+        console.log('Creating script project...');
         const { data: scriptProject } = await script.projects.create({
             requestBody: {
                 title: `Script for Sheet ${sheetId}`,
@@ -334,20 +295,204 @@ async function attachScriptToSheet(sheetId) {
             },
         });
 
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Create a deployment to ensure script is executable
+        console.log('Creating script deployment...');
+        try {
+            await script.projects.deployments.create({
+                scriptId: scriptProject.scriptId,
+                requestBody: {
+                    versionNumber: 1,
+                    manifestFileName: 'appsscript',
+                    description: 'Initial deployment for validation script',
+                },
+            });
+            console.log('Script deployment created');
+        } catch (deployErr) {
+        throw err;
+        }
+
+        // Increased delay to ensure scriptellisenproject and deployment propagation
+        console.log('Waiting for script project to propagate...');
+        await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
+
+        // Verify script project exists
+        try {
+            await script.projects.get({ scriptId: scriptProject.scriptId });
+            console.log(`Script project verified: https://script.google.com/home/projects/${scriptProject.scriptId}`);
+        } catch (verifyErr) {
+            console.error(`Failed to verify script project ${scriptProject.scriptId}: ${verifyErr.message}`);
+            throw new Error(`Script project creation failed: ${verifyErr.message}`);
+        }
 
         console.log(`Script injected successfully into spreadsheet: https://docs.google.com/spreadsheets/d/${sheetId}`);
         return scriptProject.scriptId;
     } catch (error) {
-        console.error('Error injecting script:', error.message);
         throw error;
     }
+}
+
+async function getSheetIdByName(sheets, spreadsheetId, sheetTitle) {
+    const response = await sheets.spreadsheets.get({
+        spreadsheetId,
+        fields: 'sheets.properties',
+    });
+    const sheet = response.data.sheets.find(s => s.properties.title.toUpperCase() === sheetTitle.toUpperCase());
+    return sheet ? sheet.properties.sheetId : null;
+}
+
+async function applyConditionalFormatting(sheetId, headers, sheetTitle) {
+    const auth = await getAuthenticatedClient();
+    const sheets = getSheetsClient(auth);
+
+    const sheetMeta = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+    const sheetIdMap = sheetMeta.data.sheets.reduce((map, sheet) => {
+        map[sheet.properties.title.toUpperCase()] = sheet.properties.sheetId;
+        return map;
+    }, {});
+
+    const sheetIdValue = sheetIdMap[sheetTitle.toUpperCase()];
+    if (sheetIdValue === undefined) {
+        console.error(`Sheet '${sheetTitle}' not found for conditional formatting`);
+        return;
+    }
+
+    const requests = [];
+
+    // Find CGPA column (case-insensitive)
+    const cgpaColIndex = headers.findIndex(header => header.toUpperCase() === 'CGPA');
+    if (cgpaColIndex !== -1) {
+        requests.push({
+            addConditionalFormatRule: {
+                rule: {
+                    ranges: [{
+                        sheetId: sheetIdValue,
+                        startRowIndex: 2, // Start from data rows (after metadata and headers)
+                        startColumnIndex: cgpaColIndex,
+                        endColumnIndex: cgpaColIndex + 1,
+                    }],
+                    booleanRule: {
+                        condition: {
+                            type: 'NUMBER_LESS',
+                            values: [{ userEnteredValue: '6' }],
+                        },
+                        format: {
+                            backgroundColor: { red: 1, green: 0.8, blue: 0.8 },
+                            textFormat: { bold: true },
+                        },
+                    },
+                },
+                index: 0,
+            },
+        });
+    }
+
+    if (requests.length) {
+        await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: sheetId,
+            requestBody: { requests },
+        });
+    }
+}
+
+async function applyDataValidation(sheetId, headers, rowCount, sheetTitle) {
+    if (!headers || headers.length === 0 || rowCount <= 0) {
+        console.warn(`Invalid input for data validation: headers=${headers?.length}, rowCount=${rowCount}, sheetTitle=${sheetTitle}`);
+        return;
+    }
+
+    const auth = await getAuthenticatedClient();
+    const sheets = getSheetsClient(auth);
+
+    const sheetMeta = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+    const sheetIdMap = sheetMeta.data.sheets.reduce((map, sheet) => {
+        map[sheet.properties.title.toUpperCase()] = sheet.properties.sheetId;
+        return map;
+    }, {});
+
+    const sheetIdValue = sheetIdMap[sheetTitle.toUpperCase()];
+    if (sheetIdValue === undefined) {
+        console.error(`Sheet '${sheetTitle}' not found for data validation in spreadsheet ${sheetId}`);
+        return;
+    }
+
+    const requests = [];
+
+    // Find Email column (case-insensitive, multiple variations)
+    const emailColIndex = headers.findIndex(header => 
+        ['EMAIL', 'CONTACT_EMAIL', 'E-MAIL', 'EMAIL ADDRESS'].includes(header.toUpperCase())
+    );
+    if (emailColIndex !== -1) {
+        requests.push({
+            setDataValidation: {
+                range: {
+                    sheetId: sheetIdValue,
+                    startRowIndex: 2, // Start from data rows
+                    endRowIndex: rowCount + 2,
+                    startColumnIndex: emailColIndex,
+                    endColumnIndex: emailColIndex + 1,
+                },
+                rule: {
+                    condition: {
+                        type: 'CUSTOM_FORMULA',
+                        values: [{ userEnteredValue: '=REGEXMATCH(INDIRECT("R[0]C[0]", FALSE), "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")' }],
+                    },
+                    inputMessage: 'Must be a valid email (e.g., user@domain.com)',
+                    strict: true,
+                    showCustomUi: true,
+                },
+            },
+        });
+    }
+
+    // Find Phone column (case-insensitive, multiple variations)
+    const phoneColIndex = headers.findIndex(header => 
+        ['PHONE', 'PHONE NUMBER', 'MOBILE', 'CONTACT'].includes(header.toUpperCase())
+    );
+    if (phoneColIndex !== -1) {
+        requests.push({
+            setDataValidation: {
+                range: {
+                    sheetId: sheetIdValue,
+                    startRowIndex: 2, // Start from data rows
+                    endRowIndex: rowCount + 2,
+                    startColumnIndex: phoneColIndex,
+                    endColumnIndex: phoneColIndex + 1,
+                },
+                rule: {
+                    condition: {
+                        type: 'CUSTOM_FORMULA',
+                        values: [{ userEnteredValue: '=AND(LEN(INDIRECT("R[0]C[0]", FALSE))=10, ISNUMBER(VALUE(INDIRECT("R[0]C[0]", FALSE))))' }],
+                    },
+                    inputMessage: 'Must be a 10-digit phone number',
+                    strict: true,
+                    showCustomUi: true,
+                },
+            },
+        });
+    }
+
+    if (requests.length) {
+        try {
+            await sheets.spreadsheets.batchUpdate({
+                spreadsheetId: sheetId,
+                requestBody: { requests },
+            });
+            console.log(`Data validation applied to sheet '${sheetTitle}'`);
+        } catch (error) {
+            console.error(`Failed to apply data validation to sheet '${sheetTitle}': ${error.message}`);
+        }
+    }
+}
+
+async function revalidateSheetData(sheetId) {
+    console.warn('revalidateSheetData is not implemented');
+    return { message: 'Revalidation not implemented' };
 }
 
 module.exports = {
     createSheetFromTemplate,
     writeToGoogleSheet,
-    getSheetData,
-    revalidateSheetData,
+    initializeSchoolSheets,
     attachScriptToSheet,
+    revalidateSheetData,
 };
