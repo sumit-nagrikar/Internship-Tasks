@@ -32,6 +32,55 @@ async function createSheetFromTemplate() {
     };
 }
 
+
+async function initializeSchoolSheets(auth, sheets, spreadsheetId, schools) {
+  try {
+    // Fetch existing sheets
+    const response = await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: "sheets.properties.title",
+    });
+
+    const existingSheets = response.data.sheets.map((sheet) =>
+      sheet.properties.title.toUpperCase()
+    );
+    console.log("Existing sheets:", existingSheets);
+
+    // Filter out schools that already have sheets (case-insensitive)
+    const sheetsToCreate = schools.filter(
+      (school) => !existingSheets.includes(school.toUpperCase())
+    );
+
+    if (sheetsToCreate.length === 0) {
+      console.log("All sheets already exist. Proceeding with data upload...");
+      return;
+    }
+
+    // Create batch update request for new sheets
+    const requests = sheetsToCreate.map((school) => ({
+      addSheet: {
+        properties: {
+          title: school,
+          gridProperties: {
+            frozenRowCount: 2, // Freeze first row (metadata) and second row (headers)
+          },
+        },
+      },
+    }));
+
+    // Execute batch update to create new sheets
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      resource: { requests },
+    });
+
+    console.log("Created sheets:", sheetsToCreate);
+  } catch (error) {
+    console.error("Error initializing sheets:", error.message);
+    throw error;
+  }
+}
+
 async function writeToGoogleSheet(sheetId, data) {
     const auth = await getAuthenticatedClient();
     const sheets = getSheetsClient(auth);
@@ -151,7 +200,7 @@ async function applyConditionalFormatting(sheetId, headers) {
                             ranges: [
                                 {
                                     sheetId: 0,
-                                    startRowIndex: 1,
+                                    startRowIndex: 2,
                                     startColumnIndex: 0,
                                     endColumnIndex: headers.length,
                                 },
@@ -191,7 +240,7 @@ async function applyDataValidation(sheetId, headers, rowCount) {
                 setDataValidation: {
                     range: {
                         sheetId: 0,
-                        startRowIndex: 1,
+                        startRowIndex: 2,
                         endRowIndex,
                         startColumnIndex: colIndex,
                         endColumnIndex: colIndex + 1,
@@ -218,7 +267,7 @@ async function applyDataValidation(sheetId, headers, rowCount) {
                 setDataValidation: {
                     range: {
                         sheetId: 0,
-                        startRowIndex: 1,
+                        startRowIndex: 2,
                         endRowIndex,
                         startColumnIndex: colIndex,
                         endColumnIndex: colIndex + 1,

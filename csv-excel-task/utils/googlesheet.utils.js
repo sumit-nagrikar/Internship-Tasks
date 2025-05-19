@@ -7,7 +7,7 @@ const CREDENTIALS_PATH = path.join(__dirname, '../config/oauth2.json');
 const TOKEN_PATH = path.join(__dirname, '../config/token.json');
 
 const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));
-const { client_secret, client_id, redirect_uris } = credentials.installed;
+const { client_secret, client_id, redirect_uris } = credentials.web;
 
 const oauth2Client = new google.auth.OAuth2(
     client_id,
