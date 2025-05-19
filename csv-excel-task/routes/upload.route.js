@@ -41,7 +41,6 @@ router.post('/data', upload.single('file'), async (req, res) => {
         // Write data to sheets
         await writeToGoogleSheet(sheetId, data, scriptId);
 
-        // Optional: open in browser
         await open(sheetUrl);
 
         // Delete file
