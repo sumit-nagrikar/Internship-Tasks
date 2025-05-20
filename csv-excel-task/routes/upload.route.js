@@ -1,61 +1,63 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const upload = require('../utils/multerConfig');
-const fs = require('fs');
-const path = require('path');
-const { parseCSV, parseExcel } = require('../services/fileParser.service');
-const { writeToGoogleSheet, createSheetFromTemplate, attachScriptToSheet, revalidateSheetData } = require('../services/googleSheet.service');
+const upload = require("../utils/multerConfig");
+const fs = require("fs").promises;
+const path = require("path");
+const { parseExcel } = require("../services/fileParser.service");
+const {
+  createSheetFromTemplate,
+  writeToGoogleSheet,
+  attachScriptToSheet,
+  revalidateSheetData,
+} = require("../services/googleSheet.service");
 
 let open;
 (async () => {
-    open = (await import('open')).default;
+  open = (await import("open")).default;
 })();
 
-router.post('/data', upload.single('file'), async (req, res) => {
-    const file = req.file;
-    const extension = path.extname(file.originalname);
+router.post("/data", upload.single("file"), async (req, res) => {
+  const file = req.file;
+  const extension = path.extname(file.originalname);
 
-    try {
-        let parsedData = [];
+  try {
+    if (!file) throw new Error("No file uploaded");
+    if (extension !== ".xlsx")
+      throw new Error("Only .xlsx Excel files are supported.");
 
-        const { sheetId, sheetUrl } = await createSheetFromTemplate();
-        const scriptId = await attachScriptToSheet(sheetId); // Capture scriptId
+    const data = await parseExcel(file.path);
 
-        if (extension === '.csv') {
-            parsedData = await parseCSV(file.path);
-        } else if (extension === '.xlsx') {
-            parsedData = await parseExcel(file.path);
-        } else {
-            throw new Error('Only .csv or .xlsx files are supported.');
-        }
-        // console.log('parsed data', parsedData);
-
-        await writeToGoogleSheet(sheetId, parsedData, scriptId); // Pass scriptId
-
-        fs.unlinkSync(file.path);
-
-        await open(sheetUrl);
-
-        return res.json({
-            message: 'Data written to new Google Sheet successfully.',
-            sheetUrl
-        });
-
-    } catch (err) {
-        if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
-        return res.status(500).json({ error: err.message });
+    if (!data.groupedData || Object.keys(data.groupedData).length === 0) {
+      throw new Error("No valid data found in the uploaded file.");
     }
-});
 
-router.get('/recheck/:sheetId', async (req, res) => {
+    const { sheetId, sheetUrl } = await writeToGoogleSheet(data);
+
+    await open(sheetUrl);
+
+    await fs
+      .unlink(file.path)
+      .catch((err) => console.error("File deletion error:", err));
+
+    return res.json({
+      message: "Data processed and written to Google Sheet successfully",
+      sheetUrl,
+    });
+  } catch (err) {
     try {
-        const { sheetId } = req.params;
-        const result = await revalidateSheetData(sheetId);
-        res.json({ success: true });
-    } catch (err) {
-        console.error('Recheck error:', err);
-        res.status(500).json({ success: false, error: 'Something went wrong' });
+      await fs.access(file.path);
+      await fs
+        .unlink(file.path)
+        .catch((err) => console.error("File deletion error:", err));
+    } catch (accessErr) {
+      console.warn(
+        "File does not exist or already deleted:",
+        accessErr.message
+      );
     }
+    console.error("Upload error:", err);
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

@@ -31,6 +31,27 @@ function onEdit(e) {
   }
 }
 
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu("Validator")
+    .addItem("Validate All Sheets", "validateAllSheetsManually")
+    .addItem("Validate Active Sheet", "validateSheetManually")
+    .addToUi();
+
+  const sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+  for (let sheet of sheets) {
+    validateAllRows(sheet);
+    updateTotalErrors(sheet);
+  }
+}
+
+function validateAllSheetsManually() {
+  const sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+  for (let sheet of sheets) {
+    validateAllRows(sheet);
+    updateTotalErrors(sheet);
+  }
+}
 
 function validateSheetManually() {
   const sheet = SpreadsheetApp.getActiveSheet();
@@ -41,14 +62,36 @@ function getColumnIndices(sheet) {
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   Logger.log('Headers: ' + headers.join(', '));
 
-  const nameCol = headers.indexOf("Name") + 1;
-  const emailCol = headers.indexOf("Email") + 1;
-  const phoneCol = headers.indexOf("Phone") + 1;
-  const statusCol = headers.indexOf("status") + 1;
-  const errorCountCol = headers.indexOf("errorsCount") + 1;
+  const secondRow = sheet.getRange(2, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // Case-insensitive header matching
+  const nameCol = headers.findIndex(h => h.toString().toUpperCase() === 'NAME') + 1;
+  const emailCol = headers.findIndex(h => h.toString().toUpperCase() === 'EMAIL') + 1;
+  const phoneCol = headers.findIndex(h => h.toString().toUpperCase() === 'PHONE') + 1;
+  const statusCol = secondRow.indexOf("Status") + 1;
+  const errorCountCol = secondRow.indexOf("ErrorsCount") + 1;
+
+  // Append status and errorsCount columns if missing
+  if (!statusCol) {
+    statusCol = headers.length + 1;
+    sheet.getRange(1, statusCol).setValue('status');
+    Logger.log('Added missing status column at position ' + statusCol);
+  }
+  if (!errorCountCol) {
+    errorCountCol = headers.length + (statusCol === headers.length + 1 ? 2 : 1);
+    sheet.getRange(1, errorCountCol).setValue('errorsCount');
+    Logger.log('Added missing errorsCount column at position ' + errorCountCol);
+  }
 
   if (!nameCol || !emailCol || !phoneCol || !statusCol || !errorCountCol) {
-    Logger.log(`Missing required columns: Name=${nameCol}, Email=${emailCol}, Phone=${phoneCol}, Status=${statusCol}, ErrorCount=${errorCountCol}`);
+    const missing = [];
+    if (!nameCol) missing.push('NAME');
+    if (!emailCol) missing.push('EMAIL');
+    if (!phoneCol) missing.push('PHONE');
+    if (!statusCol) missing.push('STATUS');
+    if (!errorCountCol) missing.push('ERRORSCOUNT');
+    Logger.log(`Missing required columns: ${missing.join(', ')}`);
+    SpreadsheetApp.getUi().alert('Validation Error', `Missing required columns: ${missing.join(', ')}`, SpreadsheetApp.ButtonSet.OK);
     return null;
   }
 
@@ -61,14 +104,20 @@ function cleanEditedValues(sheet, columns, row = null) {
 
   const rowsToCheck = row ? [row] : Array.from({ length: lastRow - 1 }, (_, i) => i + 2); // Rows 2 to lastRow
 
+  const nameRange = sheet.getRange(2, columns.nameCol, lastRow - 1, 1).getValues();
   const emailRange = sheet.getRange(2, columns.emailCol, lastRow - 1, 1).getValues();
   const phoneRange = sheet.getRange(2, columns.phoneCol, lastRow - 1, 1).getValues();
-
+  
+  let nameEdited = false;
   let emailEdited = false;
   let phoneEdited = false;
 
   rowsToCheck.forEach((r) => {
     const rowIndex = r - 2; // Because emailRange starts from row 2
+    if (nameRange[rowIndex][0] === "Edited") {
+      nameRange[rowIndex][0] = "";
+      nameEdited = true;
+    }
     if (emailRange[rowIndex][0] === "Edited") {
       emailRange[rowIndex][0] = "";
       emailEdited = true;
@@ -79,6 +128,10 @@ function cleanEditedValues(sheet, columns, row = null) {
     }
   });
 
+  if (nameEdited) {
+    sheet.getRange(2, columns.nameCol, lastRow - 1, 1).setValues(nameRange);
+    Logger.log(`Cleared "Edited" flags from Name column`);
+  }
   if (emailEdited) {
     sheet.getRange(2, columns.emailCol, lastRow - 1, 1).setValues(emailRange);
     Logger.log(`Cleared "Edited" flags from Email column`);
@@ -199,6 +252,7 @@ function validateAllRows(sheet) {
     Logger.log(`Validated all rows from 2 to ${dataLastRow}`);
   } catch (error) {
     Logger.log(`Error in validateAllRows: ${error.message}`);
+    SpreadsheetApp.getUi().alert('Validation Error', `Failed to validate rows: ${error.message}`, SpreadsheetApp.ButtonSet.OK);
   }
 }
 
@@ -227,11 +281,12 @@ function isValidPhone(phone) {
 }
 
 function updateTotalErrors(sheet) {
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const errorCountCol = headers.indexOf("errorsCount") + 1;
-  const statusCol = headers.indexOf("status") + 1;
+  const secondRow = sheet.getRange(2, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const statusCol = secondRow.indexOf("Status") + 1;
+  const errorCountCol = secondRow.indexOf("ErrorsCount") + 1;
   if (!errorCountCol || !statusCol) {
     Logger.log('errorsCount or status column not found');
+    SpreadsheetApp.getUi().alert('Validation Error', 'Missing status or errorsCount column', SpreadsheetApp.ButtonSet.OK);
     return;
   }
 
