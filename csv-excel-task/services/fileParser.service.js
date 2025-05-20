@@ -705,14 +705,12 @@ function parseExcel(filePath) {
   const workbook = XLSX.readFile(filePath);
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-  // Read first row (metadata to be written to spreadsheet)
   const firstRow = XLSX.utils.sheet_to_json(sheet, {
     defval: "",
     range: 0,
     header: 1,
   })[0];
 
-  // Read data starting from second row as headers, third row as data
   const jsonWithHeaderRow = XLSX.utils.sheet_to_json(sheet, {
     defval: "",
     range: 1,

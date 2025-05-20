@@ -14,7 +14,6 @@ async function createSheetFromTemplate() {
   const drive = google.drive({ version: "v3", auth });
   const sheets = getSheetsClient(auth);
 
-  // Copy the template spreadsheet
   const { data } = await drive.files.copy({
     fileId: TEMPLATE_SHEET_ID,
     requestBody: {
@@ -22,7 +21,6 @@ async function createSheetFromTemplate() {
     },
   });
 
-  // Clear existing sheets except one
   const spreadsheetId = data.id;
   const metadata = await sheets.spreadsheets.get({
     spreadsheetId,
@@ -42,7 +40,6 @@ async function createSheetFromTemplate() {
     });
   }
 
-  // Rename the remaining sheet to a temporary name
   if (existingSheets.length > 0) {
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId,
@@ -62,7 +59,6 @@ async function createSheetFromTemplate() {
     });
   }
 
-  // Grant write access to anyone with the link
   await drive.permissions.create({
     fileId: spreadsheetId,
     requestBody: {
