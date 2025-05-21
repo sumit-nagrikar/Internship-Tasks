@@ -7,6 +7,221 @@ const {
 
 const TEMPLATE_SHEET_ID = "1rKT9Q-zZ-vQA6CZNrMd10qFPSwbHlT51EJ6UUc4g_uI";
 
+const dropdownValues = [
+  "ORG_CODE",
+  "ORG_NAME",
+  "ORG_NAME_L",
+  "ORG_ADDRESS",
+  "ORG_CITY",
+  "ORG_STATE",
+  "ORG_PIN",
+  "ACADEMIC_COURSE_ID",
+  "COURSE_NAME",
+  "COURSE_NAME_L",
+  "COURSE_SUBTITLE",
+  "ADMISSION_YEAR",
+  "INTR_COURSE_NAME_FIRST",
+  "INTR_COURSE_NAME_SECOND",
+  "DEPARTMENT",
+  "STREAM",
+  "STREAM_L",
+  "STREAM_SECOND",
+  "STREAM_SECOND_L",
+  "SESSION",
+  "SPECIALIZATION_MAJOR",
+  "SPECIALIZATION_MINOR",
+  "REGN_NO",
+  "RROLL",
+  "ABC_ACCOUNT_ID",
+  "CNAME",
+  "AADHAAR_NAME",
+  "DOB",
+  "GENDER",
+  "CASTE",
+  "RELIGION",
+  "NATIONALITY",
+  "BLOOD_GROUP",
+  "PH",
+  "MOBILE",
+  "EMAIL",
+  "FNAME",
+  "MNAME",
+  "GNAME",
+  "STUDENT_ADDRESS",
+  "PHOTO",
+  "MRKS_REC_STATUS",
+  "RESULT",
+  "RESULT_TH",
+  "RESULT_PR",
+  "YEAR",
+  "MONTH",
+  "DIVISION",
+  "GRADE",
+  "PERCENT",
+  "DOR",
+  "DOI",
+  "DOV",
+  "DOE",
+  "DOP",
+  "DOQ",
+  "DOS",
+  "THESIS",
+  "REMARKS",
+  "CERT_NO",
+  "MEDIUM",
+  "SEM",
+  "CENTRE_NAME",
+  "EXAM_TYPE",
+  "TERM_TYPE",
+  "TOT",
+  "TOT_MIN",
+  "TOT_MRKS",
+  "TOT_MRKS_WRDS",
+  "TOT_MRKS_MIN",
+  "TOT_TH_MAX",
+  "TOT_TH_MIN",
+  "TOT_TH_MRKS",
+  "TOT_PR_MAX",
+  "TOT_PR_MIN",
+  "TOT_PR_MRKS",
+  "TOT_CE_MAX",
+  "TOT_CE_MIN",
+  "TOT_CE_MRKS",
+  "TOT_VV_MAX",
+  "TOT_VV_MIN",
+  "TOT_VV_MRKS",
+  "TOT_PR_CE_MAX",
+  "TOT_PR_CE_MRKS",
+  "TOT_TH_CE_MAX",
+  "TOT_TH_CE_MRKS",
+  "PREV_TOT_MRKS",
+  "PREV_TOT_MRKS_MAX",
+  "PREV_TOT_MRKS_MIN",
+  "GRAND_TOT_MAX",
+  "GRAND_TOT_MIN",
+  "GRAND_TOT_MRKS",
+  "GRAND_TOT_GRADE_POINTS",
+  "GRAND_TOT_CREDIT",
+  "GRAND_TOT_CREDIT_POINTS",
+  "TOT_GRADE",
+  "TOT_GRADE_POINTS",
+  "TOT_CREDIT",
+  "TOT_CREDIT_POINTS",
+  "CGPA",
+  "TOT_CGPA_MINOR",
+  "TOT_CREDIT_MINOR",
+  "FINAL_GMAX_TOTAL",
+  "CGPA_SCALE",
+  "GPA",
+  "SGPA",
+  "INTR_CGPA_FIRST",
+  "INTR_CGPA_SECOND",
+  "SUB1NM",
+  "SUB1",
+  "SUB1MAX",
+  "SUB1MIN",
+  "SUB1_SESSION",
+  "SUB1_TH_MAX",
+  "SUB1_TH_MIN",
+  "SUB1_PR_MAX",
+  "SUB1_PR_MIN",
+  "SUB1_CE_MAX",
+  "SUB1_CE_MIN",
+  "SUB1_VV_MAX",
+  "SUB1_VV_MIN",
+  "SUB1_VV_GRADE",
+  "SUB1_TH_MRKS",
+  "SUB1_TH_CE_MAX",
+  "SUB1_TH_CE_MRKS",
+  "SUB1_TH_GRADE",
+  "SUB1_TH_AGGREGATE",
+  "SUB1_PR_AGGREGATE",
+  "SUB1_PR_MRKS",
+  "SUB1_PR_GRADE",
+  "SUB1_PR_CE_MAX",
+  "SUB1_PR_CE_MRKS",
+  "SUB1_PR_HOURS",
+  "SUB1_TH_HOURS",
+  "SUB1_TT_HOURS",
+  "SUB1_CE_WEIGHT_MRKS",
+  "SUB1_CE_MRKS",
+  "SUB1_CE_GRADE",
+  "SUB1_CE1_MRKS",
+  "SUB1_CE1_GRADE",
+  "SUB1_CE2_MRKS",
+  "SUB1_CE2_GRADE",
+  "SUB1_CE3_MRKS",
+  "SUB1_CE3_GRADE",
+  "SUB1_CE4_MRKS",
+  "SUB1_CE4_GRADE",
+  "SUB1_VV_MRKS",
+  "SUB1_PAPER1_MRKS",
+  "SUB1_PAPER2_MRKS",
+  "SUB1_PAPER3_MRKS",
+  "SUB1_PAPER4_MRKS",
+  "SUB1_PAPER1_PR_MRKS",
+  "SUB1_PAPER2_PR_MRKS",
+  "SUB1_PAPER3_PR_MRKS",
+  "SUB1_PAPER1_CE_MRKS",
+  "SUB1_PAPER2_CE_MRKS",
+  "SUB1_PAPER3_CE_MRKS",
+  "SUB1_PAPER1_MRKS_SH",
+  "SUB1_PAPER1_CE_MRKS_SH",
+  "SUB1_PAPER1_PR_MRKS_SH",
+  "SUB1_PAPER2_MRKS_SH",
+  "SUB1_PAPER2_CE_MRKS_SH",
+  "SUB1_PAPER2_PR_MRKS_SH",
+  "SUB1_PAPER3_MRKS_SH",
+  "SUB1_PAPER3_CE_MRKS_SH",
+  "SUB1_PAPER3_PR_MRKS_SH",
+  "SUB1_MAX_MRKS_SH",
+  "SUB1_MAX_CE_MRKS_SH",
+  "SUB1_MAX_PR_MRKS_SH",
+  "SUB1_MIN_MRKS_SH",
+  "SUB1_MIN_CE_MRKS_SH",
+  "SUB1_MIN_PR_MRKS_SH",
+  "SUB1_LAB1_MRKS",
+  "SUB1_LAB2_MRKS",
+  "SUB1_LAB3_MRKS",
+  "SUB1_LAB4_MRKS",
+  "SUB1_LAB1_GRADE",
+  "SUB1_LAB2_GRADE",
+  "SUB1_LAB3_GRADE",
+  "SUB1_LAB4_GRADE",
+  "SUB1_REPORT_MRKS",
+  "SUB1_REPORT_GRADE",
+  "SUB1_PRO_MRKS",
+  "SUB1_PRO_CE_MRKS",
+  "SUB1_TEE_PR_MRKS",
+  "SUB1_TEE_TH_MRKS",
+  "SUB1_TEE_PR_GRADE",
+  "SUB1_TEE_TH_GRADE",
+  "SUB1_TEE_WEIGHT_MRKS",
+  "SUB1_TYPE",
+  "SUB1_TOT",
+  "SUB1_CE_TOT",
+  "SUB1_PR_TOT",
+  "SUB1_REMARKS",
+  "SUB1_STATUS",
+  "SUB1_GRADE",
+  "SUB1_GRADE_POINTS",
+  "SUB1_CREDIT",
+  "SUB1_CREDIT_POINTS",
+  "SUB1_CREDIT_ELIGIBILITY",
+  "SUB1_CREDIT_HOURS",
+  "SUB1_PAPER1_STATUS",
+  "SUB1_PAPER2_STATUS",
+  "SUB1_PAPER3_STATUS",
+  "SUB1_PAPER4_STATUS",
+  "SUB1_GRACE",
+  "SUB1_GROUP",
+  "SUB1_GROUP_CODE",
+  "SUB1_GROUP_MAX",
+  "SUB1_GROUP_MIN",
+  "SUB1_GROUP_TOT",
+  "NON_CREDIT_HOURS",
+];
+
 async function createSheetFromTemplate() {
   if (!TEMPLATE_SHEET_ID) throw new Error("TEMPLATE_SHEET_ID not available");
 
@@ -69,7 +284,7 @@ async function createSheetFromTemplate() {
 
   return {
     sheetId: spreadsheetId,
-    sheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
+    sheetUrl: `htps://docs.googtle.com/spreadsheets/d/${spreadsheetId}`,
   };
 }
 
@@ -160,137 +375,6 @@ async function initializeSchoolSheets(schools) {
     throw error;
   }
 }
-
-/* async function writeToGoogleSheet(sheetId, data) {
-    const auth = await getAuthenticatedClient();
-    const sheets = getSheetsClient(auth);
-
-    const { firstRow, groupedData } = data;
-    if (!groupedData || Object.keys(groupedData).length === 0) {
-        console.warn('No grouped data provided');
-        return;
-    }
-
-    // Validate school names
-    const schoolNames = Object.keys(groupedData).map(
-        school => groupedData[school].schoolDisplayName || school
-    );
-    for (const schoolName of schoolNames) {
-        if (!schoolName || schoolName.trim() === '') {
-            console.error('School name is empty or invalid');
-            throw new Error('School name cannot be empty');
-        }
-    }
-
-    // Initialize sheets for all schools
-    await initializeSchoolSheets(auth, sheets, sheetId, schoolNames);
-
-    // Field aliases for validation
-    const fieldAliases = {
-        Name: ['FIRST_NAME', 'NAME', 'FULL_NAME'],
-        Email: ['CONTACT_EMAIL', 'EMAIL', 'E-MAIL', 'EMAIL_ADDRESS'],
-    };
-
-    function findFieldKey(row, fieldName) {
-        const aliases = fieldAliases[fieldName];
-        return Object.keys(row).find(k => aliases.some(alias => k.toUpperCase() === alias.toUpperCase()));
-    }
-
-    // Write data to each sheet
-    for (const schoolName of Object.keys(groupedData)) {
-        const schoolData = groupedData[schoolName].rows;
-        if (!schoolData || !Array.isArray(schoolData) || schoolData.length === 0) {
-            console.warn(`No valid data for school: ${schoolName}`);
-            continue;
-        }
-
-        const sheetTitle = groupedData[schoolName].schoolDisplayName || schoolName;
-
-        // Get original headers from the first row
-        if (!schoolData[0]) {
-            console.warn(`No data rows for school: ${schoolName}`);
-            continue;
-        }
-        const headers = Object.keys(schoolData[0]);
-
-        // Validate data and add Status and ErrorsCount
-        const validatedData = schoolData.map(row => {
-            const errors = [];
-
-            const nameKey = findFieldKey(row, 'Name');
-            const emailKey = findFieldKey(row, 'Email');
-
-            const name = nameKey ? String(row[nameKey]).trim() : '';
-            const email = emailKey ? String(row[emailKey]).trim() : '';
-
-            if (!name) errors.push("Missing Name");
-            if (!email) errors.push("Missing Email");
-            if (email && !isValidEmail(email)) errors.push("Invalid Email");
-
-            return {
-                ...row,
-                Status: errors.length === 0 ? "Valid" : errors.join(", "),
-                ErrorsCount: errors.length
-            };
-        });
-
-        // Add Status and ErrorsCount to headers if not present
-        let finalHeaders = headers;
-        if (!headers.includes('Status')) {
-            finalHeaders = [...headers, 'Status'];
-        }
-        if (!finalHeaders.includes('ErrorsCount')) {
-            finalHeaders = [...finalHeaders, 'ErrorsCount'];
-        }
-
-        // Prepare values
-        const values = validatedData.map(row => finalHeaders.map(header => {
-            if (header === 'Status') return row.Status;
-            if (header === 'ErrorsCount') return row.ErrorsCount;
-            return row[header] ?? '';
-        }));
-
-        // Total Errors Row
-        const totalErrors = validatedData.reduce((sum, row) => sum + row.ErrorsCount, 0);
-        const totalRow = Array(finalHeaders.length).fill('');
-        totalRow[finalHeaders.indexOf('Status')] = 'Total Errors';
-        totalRow[finalHeaders.indexOf('ErrorsCount')] = totalErrors;
-
-        // Write to sheet
-        await sheets.spreadsheets.values.update({
-            spreadsheetId: sheetId,
-            range: `'${sheetTitle}'!A1`,
-            valueInputOption: 'RAW',
-            requestBody: {
-                values: [firstRow, finalHeaders, ...values, totalRow],
-            },
-        });
-
-        // Resize columns
-        const sheetIdNum = await getSheetIdByName(sheets, sheetId, sheetTitle);
-        if (sheetIdNum !== null) {
-            await sheets.spreadsheets.batchUpdate({
-                spreadsheetId: sheetId,
-                requestBody: {
-                    requests: [{
-                        autoResizeDimensions: {
-                            dimensions: {
-                                sheetId: sheetIdNum,
-                                dimension: 'COLUMNS',
-                                startIndex: 0,
-                                endIndex: Math.max(firstRow.length, finalHeaders.length),
-                            },
-                        },
-                    }],
-                },
-            });
-        }
-
-        // Apply formatting and validation
-        await applyConditionalFormatting(auth, sheets, sheetId, finalHeaders, sheetTitle);
-        await applyDataValidation(auth, sheets, sheetId, finalHeaders, schoolData.length, sheetTitle);
-    }
-} */
 
 async function writeToGoogleSheet(data) {
   const auth = await getAuthenticatedClient();
@@ -395,6 +479,288 @@ async function writeToGoogleSheet(data) {
   }
   return { sheetId, sheetUrl };
 }
+
+async function writeToGoogleSheetNew(sheetId, data, sheetTitle = "Sheet1") {
+  const auth = await getAuthenticatedClient();
+  const sheets = getSheetsClient(auth);
+
+  let displayHeaders = data.headers[0] || [];
+  let fieldKeys = data.headers[1] || [];
+
+  const systemFields = [
+    { key: "Status", label: "Status" },
+    { key: "ErrorsCount", label: "ErrorsCount" },
+  ];
+
+  systemFields.forEach(({ key }) => {
+    const index = fieldKeys.indexOf(key);
+    if (index !== -1) {
+      fieldKeys.splice(index, 1);
+      displayHeaders.splice(index, 1);
+    }
+  });
+
+  fieldKeys = systemFields.map((f) => f.key).concat(fieldKeys);
+  displayHeaders = systemFields.map((f) => f.label).concat(displayHeaders);
+
+  const allRows = Object.values(data.groupedData).flatMap(
+    (group) => group.rows
+  );
+  const dataRows = allRows.map((row) => fieldKeys.map((key) => row[key] ?? ""));
+
+  const totalErrors = allRows.reduce(
+    (sum, row) => sum + (row.ErrorsCount || 0),
+    0
+  );
+  const totalRow = Array(fieldKeys.length).fill("");
+  totalRow[fieldKeys.indexOf("Status")] = "Total Errors";
+  totalRow[fieldKeys.indexOf("ErrorsCount")] = totalErrors;
+
+  const values = [displayHeaders, fieldKeys, ...dataRows, totalRow];
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `'${sheetTitle}'!A1`,
+    valueInputOption: "RAW",
+    requestBody: { values },
+  });
+
+  const sheetIdNum = await getSheetIdByTitle(sheets, sheetId, sheetTitle);
+
+  const errorColor = { red: 1, green: 0.8, blue: 0.8 };
+
+  const errorHighlightRequests = dataRows
+    .map((row, i) => {
+      const errorCount = parseInt(row[fieldKeys.indexOf("ErrorsCount")]) || 0;
+      const rowIndex = i + 2;
+      if (errorCount > 0) {
+        return {
+          repeatCell: {
+            range: {
+              sheetId: sheetIdNum,
+              startRowIndex: rowIndex,
+              endRowIndex: rowIndex + 1,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: errorColor,
+              },
+            },
+            fields: "userEnteredFormat.backgroundColor",
+          },
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: sheetId,
+    requestBody: {
+      requests: [
+        {
+          updateDimensionProperties: {
+            range: {
+              sheetId: sheetIdNum,
+              dimension: "ROWS",
+              startIndex: 0,
+              endIndex: values.length,
+            },
+            properties: {
+              pixelSize: 30,
+            },
+            fields: "pixelSize",
+          },
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetIdNum,
+              startRowIndex: 1,
+              endRowIndex: 2,
+            },
+            cell: {
+              dataValidation: null,
+            },
+            fields: "dataValidation",
+          },
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetIdNum,
+              startRowIndex: 0,
+              endRowIndex: 2,
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: {
+                  bold: true,
+                },
+              },
+            },
+            fields: "userEnteredFormat.textFormat.bold",
+          },
+        },
+        ...errorHighlightRequests,
+      ],
+    },
+  });
+
+  const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}`;
+  console.log(`Validations Added to Spreadsheet : ${sheetUrl}`);
+  return { sheetId, sheetUrl };
+}
+
+async function getSheetIdByTitle(sheets, spreadsheetId, title) {
+  const metadata = await sheets.spreadsheets.get({ spreadsheetId });
+  const sheet = metadata.data.sheets.find((s) => s.properties.title === title);
+  return sheet?.properties.sheetId;
+}
+
+async function buildAndCreateSheetFromParsedData(
+  parsedData,
+  sheetTitle = "Sheet1"
+) {
+  const auth = await getAuthenticatedClient();
+  const sheets = getSheetsClient(auth);
+  const drive = google.drive({ version: "v3", auth });
+
+  const firstRow = parsedData[0];
+  const valueRows = parsedData.slice(1);
+
+  const firstRowClean = [...firstRow];
+
+  const createResponse = await sheets.spreadsheets.create({
+    requestBody: {
+      properties: {
+        title: "Student Data Sheet",
+      },
+    },
+  });
+
+  const sheetId = createResponse.data.spreadsheetId;
+
+  if (sheetTitle !== "Sheet1") {
+    const sheetMeta = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+    const defaultSheet = sheetMeta.data.sheets.find(
+      (s) => s.properties.sheetId === 0 || s.properties.title === "Sheet1"
+    );
+    const defaultSheetId = defaultSheet.properties.sheetId;
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: sheetId,
+      requestBody: {
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: {
+                sheetId: defaultSheetId,
+                title: sheetTitle,
+              },
+              fields: "title",
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  const sheetMetaFinal = await sheets.spreadsheets.get({
+    spreadsheetId: sheetId,
+  });
+  const sheetObj = sheetMetaFinal.data.sheets.find(
+    (s) => s.properties.title === sheetTitle
+  );
+  const sheetIdNum = sheetObj?.properties?.sheetId;
+
+  const dropdownRow = Array(firstRowClean.length).fill("");
+  for (let i = 0; i < firstRowClean.length; i++) {
+    dropdownRow[i] = dropdownValues[i % dropdownValues.length];
+  }
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `'${sheetTitle}'!A1`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [firstRowClean, dropdownRow, ...valueRows],
+    },
+  });
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: sheetId,
+    requestBody: {
+      requests: [
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetIdNum,
+              startRowIndex: 1,
+              endRowIndex: 2,
+              startColumnIndex: 0,
+              endColumnIndex: firstRowClean.length,
+            },
+            cell: {
+              dataValidation: {
+                condition: {
+                  type: "ONE_OF_LIST",
+                  values: dropdownValues.map((val) => ({
+                    userEnteredValue: val,
+                  })),
+                },
+                showCustomUi: true,
+                strict: true,
+              },
+            },
+            fields: "dataValidation",
+          },
+        },
+        {
+          autoResizeDimensions: {
+            dimensions: {
+              sheetId: sheetIdNum,
+              dimension: "COLUMNS",
+              startIndex: 0,
+              endIndex: firstRowClean.length,
+            },
+          },
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetIdNum,
+              startRowIndex: 0,
+              endRowIndex: 2,
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: {
+                  bold: true,
+                },
+              },
+            },
+            fields: "userEnteredFormat.textFormat.bold",
+          },
+        },
+      ],
+    },
+  });
+
+  // 7️⃣ Make sheet public (optional)
+  await drive.permissions.create({
+    fileId: sheetId,
+    requestBody: {
+      role: "writer",
+      type: "anyone",
+    },
+  });
+
+  const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}`;
+  console.log(`Sheet created: ${sheetUrl}`);
+  return { sheetId, sheetUrl };
+}
+
 function isValidEmail(email) {
   return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
 }
@@ -431,13 +797,12 @@ async function applyConditionalFormatting(
 
   const requests = [];
   const errorCountColIndex = headers.indexOf("ErrorsCount");
+  const sheetData = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: `'${sheetTitle}'`,
+  });
+  const rowCount = sheetData.data.values.length;
   if (errorCountColIndex !== -1) {
-    const sheetData = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheetId,
-      range: `'${sheetTitle}'`,
-    });
-    const rowCount = sheetData.data.values.length;
-
     requests.push({
       addConditionalFormatRule: {
         rule: {
@@ -470,6 +835,49 @@ async function applyConditionalFormatting(
       },
     });
   }
+
+  requests.push({
+    updateDimensionProperties: {
+      range: {
+        sheetId: sheetIdValue,
+        dimension: "ROWS",
+        startIndex: 2,
+        endIndex: rowCount - 1,
+      },
+      properties: {
+        pixelSize: 30,
+      },
+      fields: "pixelSize",
+    },
+  });
+
+  const dropdownColumnStart = 2;
+  const dropdownColumnEnd = headers.length;
+
+  requests.push({
+    repeatCell: {
+      range: {
+        sheetId: sheetIdValue,
+        startRowIndex: 1,
+        endRowIndex: 2,
+        startColumnIndex: dropdownColumnStart,
+        endColumnIndex: dropdownColumnEnd,
+      },
+      cell: {
+        dataValidation: {
+          condition: {
+            type: "ONE_OF_LIST",
+            values: dropdownValues.map((value) => ({
+              userEnteredValue: value,
+            })),
+          },
+          strict: true,
+          showCustomUi: true,
+        },
+      },
+      fields: "dataValidation",
+    },
+  });
 
   if (requests.length) {
     await sheets.spreadsheets.batchUpdate({
@@ -723,4 +1131,6 @@ module.exports = {
   getSheetData,
   revalidateSheetData,
   attachScriptToSheet,
+  buildAndCreateSheetFromParsedData,
+  writeToGoogleSheetNew,
 };
