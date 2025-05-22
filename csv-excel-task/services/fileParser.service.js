@@ -1,4 +1,8 @@
 const XLSX = require("xlsx");
+const {
+  getAuthenticatedClient,
+  getSheetsClient,
+} = require("../utils/googlesheet.utils");
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -15,7 +19,6 @@ function validateRows(rows) {
   if (!rows || rows.length === 0) return [];
 
   const emailKey = findEmailKeyFromHeaders(rows[0]);
-
   const groupedBySchool = {};
 
   rows.forEach((row, index) => {
@@ -679,7 +682,6 @@ function validateRows(rows) {
       ErrorsCount: errorCount,
       ...newRow,
     };
-
     if (!normalizedSchoolName) {
       if (!groupedBySchool["__UNKNOWN__"])
         groupedBySchool["__UNKNOWN__"] = {
@@ -720,4 +722,54 @@ function parseExcel(filePath) {
   return { firstRow, groupedData };
 }
 
-module.exports = { parseExcel, validateRows };
+function parseExcelInOneSource(filePath) {
+  const workbook = XLSX.readFile(filePath);
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+  const data = XLSX.utils.sheet_to_json(sheet, {
+    defval: "",
+    header: 1,
+  });
+
+  return data;
+}
+
+async function parseGoogleSheet(sheetId, sheetTitle = "Sheet1") {
+  const auth = await getAuthenticatedClient();
+  const sheets = getSheetsClient(auth);
+
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: `'${sheetTitle}'!A1:Z1000`,
+    valueRenderOption: "UNFORMATTED_VALUE",
+  });
+
+  const rows = response.data.values || [];
+
+  if (rows.length === 0) {
+    throw new Error("Sheet is empty");
+  }
+
+  const headers = [rows[0], rows[1]];
+
+  const dataRows = rows.slice(2);
+
+  const data = dataRows.map((row) => {
+    const obj = {};
+    row.forEach((cell, i) => {
+      obj[headers[1][i]] = cell !== undefined ? cell : "";
+    });
+    return obj;
+  });
+
+  const groupedData = validateRows(data);
+
+  return { headers, groupedData };
+}
+
+module.exports = {
+  parseExcel,
+  validateRows,
+  parseExcelInOneSource,
+  parseGoogleSheet,
+};
