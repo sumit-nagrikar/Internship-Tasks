@@ -363,10 +363,6 @@ async function initializeSchoolSheets(schools) {
   }
 }
 
-<<<<<<< HEAD
-
-=======
->>>>>>> 7587ddaa0b263e59db1d17e4e638fc6bf706953b
 async function writeToGoogleSheet(data) {
   const { firstRow, groupedData } = data;
   const firstRowWithBlankCols = [" ", " ", ...firstRow];
@@ -1063,10 +1059,6 @@ module.exports = {
   writeToGoogleSheet,
   getSheetData,
   revalidateSheetData,
-<<<<<<< HEAD
-=======
-  attachScriptToSheet,
   buildAndCreateSheetFromParsedData,
   writeToGoogleSheetNew,
->>>>>>> 7587ddaa0b263e59db1d17e4e638fc6bf706953b
 };

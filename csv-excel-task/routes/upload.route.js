@@ -67,9 +67,6 @@ router.post('/data', upload.single('file'), async (req, res) => {
     }
 });
 
-<<<<<<< HEAD
-module.exports = router;
-=======
 router.post("/excel", upload.single("file"), async (req, res) => {
   const file = req.file;
   const extension = path.extname(file.originalname);
@@ -138,4 +135,3 @@ router.post("/validate/:sheetId", async (req, res) => {
 });
 
 module.exports = router;
->>>>>>> 7587ddaa0b263e59db1d17e4e638fc6bf706953b
