@@ -1,10 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const uploadRoute = require('./routes/upload.route');
-const oauthRoute = require('./routes/oauth.route')
 
 const app = express();
-const PORT = 3000;
+const PORT = 3051;
 
 app.use(cors());
 app.use(express.json());

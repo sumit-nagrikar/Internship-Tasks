@@ -1,4 +1,2 @@
 config/credentials.json
-config/oauth2.json
-config/token.json
 node_modules/
