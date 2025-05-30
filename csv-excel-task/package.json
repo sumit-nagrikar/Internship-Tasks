@@ -15,6 +15,7 @@
   "author": "sumit",
   "license": "ISC",
   "dependencies": {
+    "bullmq": "^5.53.0",
     "cors": "^2.8.5",
     "csv-parser": "^3.2.0",
     "express": "^5.1.0",
