@@ -49,10 +49,12 @@ async function parseAndProcessFile(source) {
       firstRow = headers;
     } else {
       const workbook = XLSX.readFile(source);
-      const sheetName = workbook.SheetNames[0];
+      const sheetName = workbook.SheetNames?.[0] || "Sheet1";
       const worksheet = workbook.Sheets[sheetName];
       rows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
       if (!rows || rows.length === 0) throw new Error("No data found in the Excel file");
+
       firstRow = Object.keys(rows[0]);
       sheetId = (await createSheetFromTemplate()).sheetId;
     }
@@ -60,11 +62,10 @@ async function parseAndProcessFile(source) {
     const validatedRows = validateRows(rows);
     await addToBullMQQueue(validatedRows, firstRow, sheetId);
 
-
-    return { status: "success", message: `Data validated and queued for Google Sheet ${sheetId}`, sheetId };
+    return sheetId;
   } catch (error) {
     console.error("Error processing source:", error.stack);
-    return { status: "error", message: error.message };
+    throw new Error(error.message);
   }
 }
 
